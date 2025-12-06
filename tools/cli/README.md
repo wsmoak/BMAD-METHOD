@@ -154,7 +154,7 @@ The installer supports **15 IDE environments** through a base-derived architectu
 | `claude-code`    | Claude Code (alt) | `.claude/commands/`      |
 | `opencode`       | OpenCode          | `.opencode`              |
 | `windsurf`       | Windsurf          | `.windsurf/workflows/`   |
-| `cursor`         | Cursor            | `.cursor/rules/`         |
+| `cursor`         | Cursor            | `.cursor/commands/`      |
 | `cline`          | Cline             | `.clinerules/workflows/` |
 | `github-copilot` | GitHub Copilot    | `.github/copilot/`       |
 | `crush`          | Crush             | `.crush/`                |

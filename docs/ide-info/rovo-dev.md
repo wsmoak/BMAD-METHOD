@@ -328,8 +328,8 @@ BMAD-METHOD supports multiple IDEs simultaneously. You can have both Rovo Dev an
 For example:
 
 - Rovo Dev agents: `.rovodev/subagents/bmad-*.md`
-- Cursor rules: `.cursor/rules/bmad/`
-- Claude Code: `.claude/rules/bmad/`
+- Cursor commands: `.cursor/commands/bmad/`
+- Claude Code commands: `.claude/commands/bmad/`
 
 ## Performance Considerations
 

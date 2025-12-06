@@ -11,7 +11,7 @@ class CursorSetup extends BaseIdeSetup {
   constructor() {
     super('cursor', 'Cursor', true); // preferred IDE
     this.configDir = '.cursor';
-    this.rulesDir = 'rules';
+    this.commandsDir = 'commands';
   }
 
   /**
@@ -20,11 +20,19 @@ class CursorSetup extends BaseIdeSetup {
    */
   async cleanup(projectDir) {
     const fs = require('fs-extra');
-    const bmadRulesDir = path.join(projectDir, this.configDir, this.rulesDir, 'bmad');
 
+    // Clean up new commands directory
+    const bmadCommandsDir = path.join(projectDir, this.configDir, this.commandsDir, 'bmad');
+    if (await fs.pathExists(bmadCommandsDir)) {
+      await fs.remove(bmadCommandsDir);
+      console.log(chalk.dim(`  Removed old BMAD commands from ${this.name}`));
+    }
+
+    // Also clean up legacy rules directory if it exists (migration)
+    const bmadRulesDir = path.join(projectDir, this.configDir, 'rules', 'bmad');
     if (await fs.pathExists(bmadRulesDir)) {
       await fs.remove(bmadRulesDir);
-      console.log(chalk.dim(`  Removed old BMAD rules from ${this.name}`));
+      console.log(chalk.dim(`  Migrated from .cursor/rules/ to .cursor/commands/`));
     }
   }
 
@@ -40,12 +48,12 @@ class CursorSetup extends BaseIdeSetup {
     // Clean up old BMAD installation first
     await this.cleanup(projectDir);
 
-    // Create .cursor/rules directory structure
+    // Create .cursor/commands directory structure
     const cursorDir = path.join(projectDir, this.configDir);
-    const rulesDir = path.join(cursorDir, this.rulesDir);
-    const bmadRulesDir = path.join(rulesDir, 'bmad');
+    const commandsDir = path.join(cursorDir, this.commandsDir);
+    const bmadCommandsDir = path.join(commandsDir, 'bmad');
 
-    await this.ensureDir(bmadRulesDir);
+    await this.ensureDir(bmadCommandsDir);
 
     // Generate agent launchers first
     const agentGen = new AgentCommandGenerator(this.bmadFolderName);
@@ -76,51 +84,42 @@ class CursorSetup extends BaseIdeSetup {
     for (const item of [...agents, ...tasks, ...tools, ...workflows]) modules.add(item.module);
 
     for (const module of modules) {
-      await this.ensureDir(path.join(bmadRulesDir, module));
-      await this.ensureDir(path.join(bmadRulesDir, module, 'agents'));
-      await this.ensureDir(path.join(bmadRulesDir, module, 'tasks'));
-      await this.ensureDir(path.join(bmadRulesDir, module, 'tools'));
-      await this.ensureDir(path.join(bmadRulesDir, module, 'workflows'));
+      await this.ensureDir(path.join(bmadCommandsDir, module));
+      await this.ensureDir(path.join(bmadCommandsDir, module, 'agents'));
+      await this.ensureDir(path.join(bmadCommandsDir, module, 'tasks'));
+      await this.ensureDir(path.join(bmadCommandsDir, module, 'tools'));
+      await this.ensureDir(path.join(bmadCommandsDir, module, 'workflows'));
     }
 
-    // Process and write agent launchers with MDC format
+    // Process and write agent launchers as commands (plain markdown)
     let agentCount = 0;
     for (const artifact of agentArtifacts) {
-      // Add MDC metadata header to launcher (but don't call processContent which adds activation headers)
-      const content = this.wrapLauncherWithMDC(artifact.content, {
-        module: artifact.module,
-        name: artifact.name,
-      });
+      // Use artifact content directly - it already has proper frontmatter
+      const targetPath = path.join(bmadCommandsDir, artifact.module, 'agents', `${artifact.name}.md`);
 
-      const targetPath = path.join(bmadRulesDir, artifact.module, 'agents', `${artifact.name}.mdc`);
-
-      await this.writeFile(targetPath, content);
+      await this.writeFile(targetPath, artifact.content);
       agentCount++;
     }
 
-    // Process and copy tasks
+    // Process and copy tasks as commands
     let taskCount = 0;
     for (const task of tasks) {
-      const content = await this.readAndProcess(task.path, {
-        module: task.module,
-        name: task.name,
-      });
+      const fs = require('fs-extra');
+      const content = await fs.readFile(task.path, 'utf8');
 
-      const targetPath = path.join(bmadRulesDir, task.module, 'tasks', `${task.name}.mdc`);
+      const targetPath = path.join(bmadCommandsDir, task.module, 'tasks', `${task.name}.md`);
 
       await this.writeFile(targetPath, content);
       taskCount++;
     }
 
-    // Process and copy tools
+    // Process and copy tools as commands
     let toolCount = 0;
     for (const tool of tools) {
-      const content = await this.readAndProcess(tool.path, {
-        module: tool.module,
-        name: tool.name,
-      });
+      const fs = require('fs-extra');
+      const content = await fs.readFile(tool.path, 'utf8');
 
-      const targetPath = path.join(bmadRulesDir, tool.module, 'tools', `${tool.name}.mdc`);
+      const targetPath = path.join(bmadCommandsDir, tool.module, 'tools', `${tool.name}.md`);
 
       await this.writeFile(targetPath, content);
       toolCount++;
@@ -130,28 +129,23 @@ class CursorSetup extends BaseIdeSetup {
     let workflowCount = 0;
     for (const artifact of workflowArtifacts) {
       if (artifact.type === 'workflow-command') {
-        // Add MDC metadata header to workflow command
-        const content = this.wrapLauncherWithMDC(artifact.content, {
-          module: artifact.module,
-          name: path.basename(artifact.relativePath, '.md'),
-        });
+        // Use artifact content directly - it already has proper frontmatter
+        const targetPath = path.join(bmadCommandsDir, artifact.module, 'workflows', `${path.basename(artifact.relativePath)}`);
 
-        const targetPath = path.join(bmadRulesDir, artifact.module, 'workflows', `${path.basename(artifact.relativePath, '.md')}.mdc`);
-
-        await this.writeFile(targetPath, content);
+        await this.writeFile(targetPath, artifact.content);
         workflowCount++;
       }
     }
 
-    // Create BMAD index file (but NOT .cursorrules - user manages that)
-    await this.createBMADIndex(bmadRulesDir, agents, tasks, tools, workflows, modules);
+    // Create BMAD index file
+    await this.createBMADIndex(bmadCommandsDir, agents, tasks, tools, workflows, modules);
 
     console.log(chalk.green(`✓ ${this.name} configured:`));
     console.log(chalk.dim(`  - ${agentCount} agents installed`));
     console.log(chalk.dim(`  - ${taskCount} tasks installed`));
     console.log(chalk.dim(`  - ${toolCount} tools installed`));
     console.log(chalk.dim(`  - ${workflowCount} workflows installed`));
-    console.log(chalk.dim(`  - Rules directory: ${path.relative(projectDir, bmadRulesDir)}`));
+    console.log(chalk.dim(`  - Commands directory: ${path.relative(projectDir, bmadCommandsDir)}`));
 
     return {
       success: true,
@@ -165,33 +159,33 @@ class CursorSetup extends BaseIdeSetup {
   /**
    * Create BMAD index file for easy navigation
    */
-  async createBMADIndex(bmadRulesDir, agents, tasks, tools, workflows, modules) {
-    const indexPath = path.join(bmadRulesDir, 'index.mdc');
+  async createBMADIndex(bmadCommandsDir, agents, tasks, tools, workflows, modules) {
+    const indexPath = path.join(bmadCommandsDir, 'index.md');
 
     let content = `---
+name: bmad-help
 description: BMAD Method - Master Index
-globs:
-alwaysApply: true
+globs: []
+alwaysApply: false
 ---
 
-# BMAD Method - Cursor Rules Index
+# BMAD Method - Cursor Commands Index
 
 This is the master index for all BMAD agents, tasks, tools, and workflows available in your project.
 
 ## Installation Complete!
 
-BMAD rules have been installed to: \`.cursor/rules/bmad/\`
-
-**Note:** BMAD does not modify your \`.cursorrules\` file. You manage that separately.
+BMAD commands have been installed to: \`.cursor/commands/bmad/\`
 
 ## How to Use
 
-- Reference specific agents: @bmad/{module}/agents/{agent-name}
-- Reference specific tasks: @bmad/{module}/tasks/{task-name}
-- Reference specific tools: @bmad/{module}/tools/{tool-name}
-- Reference specific workflows: @bmad/{module}/workflows/{workflow-name}
-- Reference entire modules: @bmad/{module}
-- Reference this index: @bmad/index
+Type \`/\` in Cursor chat to see all available commands:
+
+- Agents: \`/pm\`, \`/architect\`, \`/dev\`, etc.
+- Workflows: \`/workflow-status\`, \`/code-review\`, etc.
+- Tasks: \`/task-name\`
+- Tools: \`/tool-name\`
+- This help: \`/bmad-help\`
 
 ## Available Modules
 
@@ -205,7 +199,7 @@ BMAD rules have been installed to: \`.cursor/rules/bmad/\`
       if (moduleAgents.length > 0) {
         content += `**Agents:**\n`;
         for (const agent of moduleAgents) {
-          content += `- @bmad/${module}/agents/${agent.name} - ${agent.name}\n`;
+          content += `- \`/${agent.name}\` - ${agent.name}\n`;
         }
         content += '\n';
       }
@@ -215,7 +209,7 @@ BMAD rules have been installed to: \`.cursor/rules/bmad/\`
       if (moduleTasks.length > 0) {
         content += `**Tasks:**\n`;
         for (const task of moduleTasks) {
-          content += `- @bmad/${module}/tasks/${task.name} - ${task.name}\n`;
+          content += `- \`/${task.name}\` - ${task.name}\n`;
         }
         content += '\n';
       }
@@ -225,7 +219,7 @@ BMAD rules have been installed to: \`.cursor/rules/bmad/\`
       if (moduleTools.length > 0) {
         content += `**Tools:**\n`;
         for (const tool of moduleTools) {
-          content += `- @bmad/${module}/tools/${tool.name} - ${tool.name}\n`;
+          content += `- \`/${tool.name}\` - ${tool.name}\n`;
         }
         content += '\n';
       }
@@ -235,7 +229,7 @@ BMAD rules have been installed to: \`.cursor/rules/bmad/\`
       if (moduleWorkflows.length > 0) {
         content += `**Workflows:**\n`;
         for (const workflow of moduleWorkflows) {
-          content += `- @bmad/${module}/workflows/${workflow.name} - ${workflow.name}\n`;
+          content += `- \`/${workflow.name}\` - ${workflow.name}\n`;
         }
         content += '\n';
       }
@@ -244,124 +238,21 @@ BMAD rules have been installed to: \`.cursor/rules/bmad/\`
     content += `
 ## Quick Reference
 
-- All BMAD rules are Manual type - reference them explicitly when needed
+- All BMAD commands are available via slash commands (type \`/\` in Cursor chat)
 - Agents provide persona-based assistance with specific expertise
 - Tasks are reusable workflows for common operations
 - Tools provide specialized functionality
 - Workflows orchestrate multi-step processes
 - Each agent includes an activation block for proper initialization
 
-## Configuration
+## Tips
 
-BMAD rules are configured as Manual rules (alwaysApply: false) to give you control
-over when they're included in your context. Reference them explicitly when you need
-specific agent expertise, task workflows, tools, or guided workflows.
+- Type \`/\` to see all available commands in the command picker
+- Commands are organized by module (core, bmm, etc.)
+- Use \`/bmad-help\` anytime to see this index
 `;
 
     await this.writeFile(indexPath, content);
-  }
-
-  /**
-   * Read and process file content
-   */
-  async readAndProcess(filePath, metadata) {
-    const fs = require('fs-extra');
-    const content = await fs.readFile(filePath, 'utf8');
-    return this.processContent(content, metadata);
-  }
-
-  /**
-   * Override processContent to add MDC metadata header for Cursor
-   * @param {string} content - File content
-   * @param {Object} metadata - File metadata
-   * @returns {string} Processed content with MDC header
-   */
-  processContent(content, metadata = {}) {
-    // First apply base processing (includes activation injection for agents)
-    let processed = super.processContent(content, metadata);
-
-    // Strip any existing frontmatter from the processed content
-    // This prevents duplicate frontmatter blocks
-    const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n/;
-    if (frontmatterRegex.test(processed)) {
-      processed = processed.replace(frontmatterRegex, '');
-    }
-
-    // Determine the type and description based on content
-    const isAgent = content.includes('<agent');
-    const isTask = content.includes('<task');
-    const isTool = content.includes('<tool');
-    const isWorkflow = content.includes('workflow:') || content.includes('name:');
-
-    let description = '';
-    let globs = '';
-
-    if (isAgent) {
-      // Extract agent title if available
-      const titleMatch = content.match(/title="([^"]+)"/);
-      const title = titleMatch ? titleMatch[1] : metadata.name;
-      description = `BMAD ${metadata.module.toUpperCase()} Agent: ${title}`;
-      globs = '';
-    } else if (isTask) {
-      // Extract task name if available
-      const nameMatch = content.match(/name="([^"]+)"/);
-      const taskName = nameMatch ? nameMatch[1] : metadata.name;
-      description = `BMAD ${metadata.module.toUpperCase()} Task: ${taskName}`;
-      globs = '';
-    } else if (isTool) {
-      // Extract tool name if available
-      const nameMatch = content.match(/name="([^"]+)"/);
-      const toolName = nameMatch ? nameMatch[1] : metadata.name;
-      description = `BMAD ${metadata.module.toUpperCase()} Tool: ${toolName}`;
-      globs = '';
-    } else if (isWorkflow) {
-      // Workflow
-      description = `BMAD ${metadata.module.toUpperCase()} Workflow: ${metadata.name}`;
-      globs = '';
-    } else {
-      description = `BMAD ${metadata.module.toUpperCase()}: ${metadata.name}`;
-      globs = '';
-    }
-
-    // Create MDC metadata header
-    const mdcHeader = `---
-description: ${description}
-globs: ${globs}
-alwaysApply: false
----
-
-`;
-
-    // Add the MDC header to the processed content
-    return mdcHeader + processed;
-  }
-
-  /**
-   * Wrap launcher content with MDC metadata (without base processing)
-   * Launchers are already complete and should not have activation headers injected
-   */
-  wrapLauncherWithMDC(launcherContent, metadata = {}) {
-    // Strip the launcher's frontmatter - we'll replace it with MDC frontmatter
-    const frontmatterRegex = /^---\s*\n[\s\S]*?\n---\s*\n/;
-    const contentWithoutFrontmatter = launcherContent.replace(frontmatterRegex, '');
-
-    // Extract metadata from launcher frontmatter for MDC description
-    const nameMatch = launcherContent.match(/name:\s*"([^"]+)"/);
-    const name = nameMatch ? nameMatch[1] : metadata.name;
-
-    const description = `BMAD ${metadata.module.toUpperCase()} Agent: ${name}`;
-
-    // Create MDC metadata header
-    const mdcHeader = `---
-description: ${description}
-globs:
-alwaysApply: false
----
-
-`;
-
-    // Return MDC header + launcher content (without its original frontmatter)
-    return mdcHeader + contentWithoutFrontmatter;
   }
 
   /**
@@ -373,7 +264,7 @@ alwaysApply: false
    * @returns {Object|null} Info about created command
    */
   async installCustomAgentLauncher(projectDir, agentName, agentPath, metadata) {
-    const customAgentsDir = path.join(projectDir, this.configDir, this.rulesDir, 'bmad', 'custom', 'agents');
+    const customAgentsDir = path.join(projectDir, this.configDir, this.commandsDir, 'bmad', 'custom', 'agents');
 
     if (!(await this.exists(path.join(projectDir, this.configDir)))) {
       return null; // IDE not configured for this project
@@ -381,7 +272,14 @@ alwaysApply: false
 
     await this.ensureDir(customAgentsDir);
 
-    const launcherContent = `You must fully embody this agent's persona and follow all activation instructions exactly as specified. NEVER break character until given an exit command.
+    const launcherContent = `---
+name: '${agentName}'
+description: '${agentName} agent'
+globs: []
+alwaysApply: false
+---
+
+You must fully embody this agent's persona and follow all activation instructions exactly as specified. NEVER break character until given an exit command.
 
 <agent-activation CRITICAL="TRUE">
 1. LOAD the FULL agent file from @${agentPath}
@@ -393,22 +291,12 @@ alwaysApply: false
 </agent-activation>
 `;
 
-    // Cursor uses MDC format with metadata header
-    const mdcContent = `---
-description: "${agentName} agent"
-globs:
-alwaysApply: false
----
-
-${launcherContent}
-`;
-
-    const launcherPath = path.join(customAgentsDir, `${agentName}.mdc`);
-    await this.writeFile(launcherPath, mdcContent);
+    const launcherPath = path.join(customAgentsDir, `${agentName}.md`);
+    await this.writeFile(launcherPath, launcherContent);
 
     return {
       path: launcherPath,
-      command: `@${agentName}`,
+      command: `/${agentName}`,
     };
   }
 }

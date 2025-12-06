@@ -1,25 +1,36 @@
 # BMAD Method - Cursor Instructions
 
-## Activating Agents
+## Activating Agents and Commands
 
-BMAD agents are installed in `.cursor/rules/bmad/` as MDC rules.
+BMAD commands are installed in `.cursor/commands/bmad/` as slash commands.
 
 ### How to Use
 
-1. **Reference in Chat**: Use `@{bmad_folder}/{module}/agents/{agent-name}`
-2. **Include Entire Module**: Use `@{bmad_folder}/{module}`
-3. **Reference Index**: Use `@{bmad_folder}/index` for all available agents
+1. **Type `/` in Chat**: Opens the command picker with all available BMAD commands
+2. **Direct Slash Commands**: Type `/` followed by the command name (e.g., `/pm`, `/architect`)
+3. **Browse Commands**: All BMAD agents, workflows, tasks, and tools appear as slash commands
 
 ### Examples
 
 ```
-@{bmad_folder}/core/agents/dev - Activate dev agent
-@{bmad_folder}/bmm/agents/architect - Activate architect agent
-@{bmad_folder}/core - Include all core agents/tasks
+/pm                 - Activate PM agent
+/architect          - Activate architect agent
+/dev               - Activate dev agent
+/workflow-status   - Check workflow status
+/code-review       - Start code review workflow
+/bmad-help         - View all available BMAD commands
 ```
+
+### Command Categories
+
+- **Agents**: `/pm`, `/architect`, `/dev`, `/test`, etc.
+- **Workflows**: `/workflow-status`, `/code-review`, etc.
+- **Tasks**: Various reusable task commands
+- **Tools**: Specialized tool commands
 
 ### Notes
 
-- Rules are Manual type - only loaded when explicitly referenced
+- Commands are activated on-demand (alwaysApply: false)
 - No automatic context pollution
-- Can combine multiple agents: `@{bmad_folder}/core/agents/dev @{bmad_folder}/core/agents/test`
+- Clean, intuitive slash command interface
+- Type `/` to see all available commands in the picker
