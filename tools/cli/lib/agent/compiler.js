@@ -59,7 +59,7 @@ function buildSimpleActivation(criticalActions = [], menuItems = [], deploymentT
 
   // Standard steps
   activation += `  <step n="${stepNum++}">Load persona from this current agent file (already in context)</step>\n`;
-  activation += `  <step n="${stepNum++}">Load and read {project-root}/{bmad_folder}/core/config.yaml to get {user_name}, {communication_language}, {output_folder}</step>\n`;
+  activation += `  <step n="${stepNum++}">Load and read {project-root}/.bmad/core/config.yaml to get {user_name}, {communication_language}, {output_folder}</step>\n`;
   activation += `  <step n="${stepNum++}">Remember: user's name is {user_name}</step>\n`;
 
   // Agent-specific steps from critical_actions
@@ -119,7 +119,7 @@ function buildSimpleActivation(criticalActions = [], menuItems = [], deploymentT
     if (usedHandlers.has('workflow')) {
       activation += `      <handler type="workflow">
         When menu item has: workflow="path/to/workflow.yaml"
-        1. CRITICAL: Always LOAD {project-root}/{bmad_folder}/core/tasks/workflow.xml
+        1. CRITICAL: Always LOAD {project-root}/.bmad/core/tasks/workflow.xml
         2. Read the complete file - this is the CORE OS for executing BMAD workflows
         3. Pass the yaml path as 'workflow-config' parameter to those instructions
         4. Execute workflow.xml instructions precisely following all steps
@@ -150,7 +150,7 @@ function buildSimpleActivation(criticalActions = [], menuItems = [], deploymentT
     if (usedHandlers.has('validate-workflow')) {
       activation += `      <handler type="validate-workflow">
         When menu item has: validate-workflow="path/to/workflow.yaml"
-        1. CRITICAL: Always LOAD {project-root}/{bmad_folder}/core/tasks/validate-workflow.xml
+        1. CRITICAL: Always LOAD {project-root}/.bmad/core/tasks/validate-workflow.xml
         2. Read the complete file - this is the CORE OS for validating BMAD workflows
         3. Pass the workflow.yaml path as 'workflow' parameter to those instructions
         4. Pass any checklist.md from the workflow location as 'checklist' parameter if available
@@ -438,23 +438,16 @@ function compileToXml(agentYaml, agentName = '', targetPath = '') {
  * @param {Object} answers - Answers from install_config questions (or defaults)
  * @param {string} agentName - Optional final agent name (user's custom persona name)
  * @param {string} targetPath - Optional target path for agent ID
+ * @param {Object} options - Additional options including config
  * @returns {Object} { xml: string, metadata: Object }
  */
-function compileAgent(yamlContent, answers = {}, agentName = '', targetPath = '') {
+function compileAgent(yamlContent, answers = {}, agentName = '', targetPath = '', options = {}) {
   // Parse YAML
   const agentYaml = yaml.parse(yamlContent);
 
-  // Inject custom agent name into metadata.name if provided
-  // This is the user's chosen persona name (e.g., "Fred" instead of "Inkwell Von Comitizen")
-  if (agentName && agentYaml.agent && agentYaml.agent.metadata) {
-    // Convert kebab-case to title case for the name field
-    // e.g., "fred-commit-poet" → "Fred Commit Poet"
-    const titleCaseName = agentName
-      .split('-')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-    agentYaml.agent.metadata.name = titleCaseName;
-  }
+  // Note: agentName parameter is for UI display only, not for modifying the YAML
+  // The persona name (metadata.name) should always come from the YAML file
+  // We should NEVER modify metadata.name as it's part of the agent's identity
 
   // Extract install_config
   const installConfig = extractInstallConfig(agentYaml);
@@ -466,14 +459,22 @@ function compileAgent(yamlContent, answers = {}, agentName = '', targetPath = ''
     finalAnswers = { ...defaults, ...answers };
   }
 
+  // Add agent_sidecar_folder to answers if provided in config
+  if (options.config && options.config.agent_sidecar_folder) {
+    finalAnswers.agent_sidecar_folder = options.config.agent_sidecar_folder;
+  }
+
   // Process templates with answers
   const processedYaml = processAgentYaml(agentYaml, finalAnswers);
 
   // Strip install_config from output
   const cleanYaml = stripInstallConfig(processedYaml);
 
-  // Compile to XML
-  const xml = compileToXml(cleanYaml, agentName, targetPath);
+  // Replace {agent_sidecar_folder} in XML content
+  let xml = compileToXml(cleanYaml, agentName, targetPath);
+  if (finalAnswers.agent_sidecar_folder) {
+    xml = xml.replaceAll('{agent_sidecar_folder}', finalAnswers.agent_sidecar_folder);
+  }
 
   return {
     xml,
