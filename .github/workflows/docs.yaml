@@ -24,6 +24,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    if: github.repository == 'bmad-code-org/BMAD-METHOD'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

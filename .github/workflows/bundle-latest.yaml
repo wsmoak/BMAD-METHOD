@@ -11,6 +11,7 @@ permissions:
 jobs:
   bundle-and-publish:
     runs-on: ubuntu-latest
+    if: github.repository == 'bmad-code-org/BMAD-METHOD'
     steps:
       - name: Checkout BMAD-METHOD
         uses: actions/checkout@v4
