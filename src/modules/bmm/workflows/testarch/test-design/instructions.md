@@ -2,7 +2,7 @@
 
 # Test Design and Risk Assessment
 
-**Workflow ID**: `.bmad/bmm/testarch/test-design`
+**Workflow ID**: `_bmad/bmm/testarch/test-design`
 **Version**: 4.0 (BMad v6)
 
 ---
@@ -25,11 +25,11 @@ The workflow auto-detects which mode to use based on project phase.
 ### Mode Detection
 
 1. **Check for sprint-status.yaml**
-   - If `{output_folder}/bmm-sprint-status.yaml` exists → **Epic-Level Mode** (Phase 4)
+   - If `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode** (Phase 4)
    - If NOT exists → Check workflow status
 
 2. **Check workflow-status.yaml**
-   - Read `{output_folder}/bmm-workflow-status.yaml`
+   - Read `{planning_artifacts}/bmm-workflow-status.yaml`
    - If `implementation-readiness: required` or `implementation-readiness: recommended` → **System-Level Mode** (Phase 3)
    - Otherwise → **Epic-Level Mode** (Phase 4 without sprint status yet)
 
@@ -74,7 +74,7 @@ The workflow auto-detects which mode to use based on project phase.
 
 3. **Load Knowledge Base Fragments (System-Level)**
 
-   **Critical:** Consult `{project-root}/.bmad/bmm/testarch/tea-index.csv` to load:
+   **Critical:** Consult `{project-root}/_bmad/bmm/testarch/tea-index.csv` to load:
    - `nfr-criteria.md` - NFR validation approach (security, performance, reliability, maintainability)
    - `test-levels-framework.md` - Test levels strategy guidance
    - `risk-governance.md` - Testability risk identification
@@ -108,7 +108,7 @@ The workflow auto-detects which mode to use based on project phase.
 
 4. **Load Knowledge Base Fragments (Epic-Level)**
 
-   **Critical:** Consult `{project-root}/.bmad/bmm/testarch/tea-index.csv` to load:
+   **Critical:** Consult `{project-root}/_bmad/bmm/testarch/tea-index.csv` to load:
    - `risk-governance.md` - Risk classification framework (6 categories: TECH, SEC, PERF, DATA, BUS, OPS), automated scoring, gate decision engine, owner tracking (625 lines, 4 examples)
    - `probability-impact.md` - Risk scoring methodology (probability × impact matrix, automated classification, dynamic re-assessment, gate integration, 604 lines, 4 examples)
    - `test-levels-framework.md` - Test level selection guidance (E2E vs API vs Component vs Unit with decision matrix, characteristics, when to use each, 467 lines, 4 examples)
@@ -764,7 +764,7 @@ After completing this workflow, provide a summary:
 
 1. Review risk assessment with team
 2. Prioritize mitigation for high-risk items (score ≥6)
-3. Run `atdd` workflow to generate failing tests for P0 scenarios
+3. Run `*atdd` to generate failing tests for P0 scenarios (separate workflow; not auto-run by `*test-design`)
 4. Allocate resources per effort estimates
 5. Set up test data factories and fixtures
 ```

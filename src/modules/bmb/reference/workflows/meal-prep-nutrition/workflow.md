@@ -2,6 +2,7 @@
 name: Meal Prep & Nutrition Plan
 description: Creates personalized meal plans through collaborative nutrition planning between an expert facilitator and individual seeking to improve their nutrition habits.
 web_bundle: true
+standalone: false
 ---
 
 # Meal Prep & Nutrition Plan Workflow
@@ -49,10 +50,11 @@ This uses **step-file architecture** for disciplined execution:
 
 ### 1. Configuration Loading
 
-Load and read full config from {project-root}/.bmad/core/config.yaml and resolve:
+Load and read full config from {project-root}/_bmad/core/config.yaml and resolve:
 
 - `project_name`, `output_folder`, `user_name`, `communication_language`, `document_output_language`
+- ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
 ### 2. First Step EXECUTION
 
-Load, read the full file and then execute `{project-root}/.bmad/bmb/reference/workflows/meal-prep-nutrition/steps/step-01-init.md` to begin the workflow.
+Load, read the full file and then execute `{project-root}/_bmad/bmb/reference/workflows/meal-prep-nutrition/steps/step-01-init.md` to begin the workflow.

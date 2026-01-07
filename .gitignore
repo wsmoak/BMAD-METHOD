@@ -31,7 +31,7 @@ Thumbs.db
 # IDE and editor configs
 .windsurf/
 .trae/
-.bmad*/.cursor/
+_bmad*/.cursor/
 
 # AI assistant files
 CLAUDE.md
@@ -44,10 +44,8 @@ CLAUDE.local.md
 .claude/settings.local.json
 
 # Project-specific
-.bmad-core
-.bmad-creator-tools
-test-project-install/*
-sample-project/*
+_bmad-core
+_bmad-creator-tools
 flattened-codebase.xml
 *.stats.md
 .internal-docs/
@@ -65,7 +63,8 @@ src/modules/bmgd/sub-modules/
 shared-modules
 z*/
 
-.bmad
+_bmad
+_bmad-output
 .claude
 .codex
 .github/chatmodes
@@ -75,3 +74,8 @@ z*/
 .roo
 
 bmad-custom-src/
+
+# Astro / Documentation Build
+website/.astro/
+website/dist/
+build/

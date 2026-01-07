@@ -3,17 +3,17 @@ name: 'step-09-functional'
 description: 'Synthesize all discovery into comprehensive functional requirements'
 
 # Path Definitions
-workflow_path: '{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd'
+workflow_path: '{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd'
 
 # File References
 thisStepFile: '{workflow_path}/steps/step-09-functional.md'
 nextStepFile: '{workflow_path}/steps/step-10-nonfunctional.md'
 workflowFile: '{workflow_path}/workflow.md'
-outputFile: '{output_folder}/prd.md'
+outputFile: '{planning_artifacts}/prd.md'
 
 # Task References
-advancedElicitationTask: '{project-root}/.bmad/core/tasks/advanced-elicitation.xml'
-partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
+advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
+partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 ---
 
 # Step 9: Functional Requirements Synthesis
@@ -30,6 +30,7 @@ partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - 💬 FOCUS on creating comprehensive capability inventory for the product
 - 🎯 CRITICAL: This is THE CAPABILITY CONTRACT for all downstream work
+- ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
 ## EXECUTION PROTOCOLS:
 
@@ -49,8 +50,8 @@ This step will generate content and present choices:
 
 ## PROTOCOL INTEGRATION:
 
-- When 'A' selected: Execute {project-root}/.bmad/core/tasks/advanced-elicitation.xml
-- When 'P' selected: Execute {project-root}/.bmad/core/workflows/party-mode/workflow.md
+- When 'A' selected: Execute {project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml
+- When 'P' selected: Execute {project-root}/_bmad/core/workflows/party-mode/workflow.md
 - PROTOCOLS always return to this step's A/P/C menu
 - User accepts/rejects protocol changes before proceeding
 
@@ -209,7 +210,7 @@ Show the generated functional requirements and present choices:
 
 #### If 'A' (Advanced Elicitation):
 
-- Execute {project-root}/.bmad/core/tasks/advanced-elicitation.xml with the current FR list
+- Execute {project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml with the current FR list
 - Process the enhanced capability coverage that comes back
 - Ask user: "Accept these additions to the functional requirements? (y/n)"
 - If yes: Update content with improvements, then return to A/P/C menu
@@ -217,7 +218,7 @@ Show the generated functional requirements and present choices:
 
 #### If 'P' (Party Mode):
 
-- Execute {project-root}/.bmad/core/workflows/party-mode/workflow.md with the current FR list
+- Execute {project-root}/_bmad/core/workflows/party-mode/workflow.md with the current FR list
 - Process the collaborative capability validation and additions
 - Ask user: "Accept these changes to the functional requirements? (y/n)"
 - If yes: Update content with improvements, then return to A/P/C menu
@@ -225,9 +226,9 @@ Show the generated functional requirements and present choices:
 
 #### If 'C' (Continue):
 
-- Append the final content to `{output_folder}/prd.md`
-- Update frontmatter: `stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9]`
-- Load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-10-nonfunctional.md`
+- Append the final content to `{outputFile}`
+- Update frontmatter: add this step name to the end of the steps completed array
+- Load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-10-nonfunctional.md`
 
 ## APPEND TO DOCUMENT:
 
@@ -264,6 +265,6 @@ Emphasize to user: "This FR list is now binding. Any feature not listed here wil
 
 ## NEXT STEP:
 
-After user selects 'C' and content is saved to document, load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-10-nonfunctional.md` to define non-functional requirements.
+After user selects 'C' and content is saved to document, load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-10-nonfunctional.md` to define non-functional requirements.
 
 Remember: Do NOT proceed to step-10 until user explicitly selects 'C' from the A/P/C menu and content is saved!

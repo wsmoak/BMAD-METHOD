@@ -1,6 +1,6 @@
 const path = require('node:path');
 const fs = require('fs-extra');
-const yaml = require('js-yaml');
+const yaml = require('yaml');
 const { Manifest } = require('./manifest');
 
 class Detector {
@@ -49,7 +49,7 @@ class Detector {
       if (await fs.pathExists(coreConfigPath)) {
         try {
           const configContent = await fs.readFile(coreConfigPath, 'utf8');
-          const config = yaml.load(configContent);
+          const config = yaml.parse(configContent);
           if (!result.version && config.version) {
             result.version = config.version;
           }
@@ -77,7 +77,7 @@ class Detector {
         if (await fs.pathExists(moduleConfigPath)) {
           try {
             const configContent = await fs.readFile(moduleConfigPath, 'utf8');
-            const config = yaml.load(configContent);
+            const config = yaml.parse(configContent);
             moduleInfo.version = config.version || 'unknown';
             moduleInfo.name = config.name || moduleId;
             moduleInfo.description = config.description;
@@ -92,7 +92,7 @@ class Detector {
       // Fallback: scan directory for modules (legacy installations without manifest)
       const entries = await fs.readdir(bmadDir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isDirectory() && entry.name !== 'core' && entry.name !== '_cfg') {
+        if (entry.isDirectory() && entry.name !== 'core' && entry.name !== '_config') {
           const modulePath = path.join(bmadDir, entry.name);
           const moduleConfigPath = path.join(modulePath, 'config.yaml');
 
@@ -106,7 +106,7 @@ class Detector {
 
             try {
               const configContent = await fs.readFile(moduleConfigPath, 'utf8');
-              const config = yaml.load(configContent);
+              const config = yaml.parse(configContent);
               moduleInfo.version = config.version || 'unknown';
               moduleInfo.name = config.name || entry.name;
               moduleInfo.description = config.description;
@@ -135,7 +135,7 @@ class Detector {
   }
 
   /**
-   * Detect legacy installation (.bmad-method, .bmm, .cis)
+   * Detect legacy installation (_bmad-method, .bmm, .cis)
    * @param {string} projectDir - Project directory to check
    * @returns {Object} Legacy installation details
    */
@@ -147,8 +147,8 @@ class Detector {
       paths: [],
     };
 
-    // Check for legacy core (.bmad-method)
-    const legacyCorePath = path.join(projectDir, '.bmad-method');
+    // Check for legacy core (_bmad-method)
+    const legacyCorePath = path.join(projectDir, '_bmad-method');
     if (await fs.pathExists(legacyCorePath)) {
       result.hasLegacy = true;
       result.legacyCore = true;
@@ -161,7 +161,7 @@ class Detector {
       if (
         entry.isDirectory() &&
         entry.name.startsWith('.') &&
-        entry.name !== '.bmad-method' &&
+        entry.name !== '_bmad-method' &&
         !entry.name.startsWith('.git') &&
         !entry.name.startsWith('.vscode') &&
         !entry.name.startsWith('.idea')
@@ -203,127 +203,17 @@ class Detector {
   }
 
   /**
-   * Detect legacy BMAD v4 footprints (case-sensitive path checks)
-   * V4 used .bmad-method as default folder name
-   * V6+ uses configurable folder names and ALWAYS has _cfg/manifest.yaml with installation.version
+   * Detect legacy BMAD v4 .bmad-method folder
    * @param {string} projectDir - Project directory to check
    * @returns {{ hasLegacyV4: boolean, offenders: string[] }}
    */
   async detectLegacyV4(projectDir) {
-    // Helper: check existence of a nested path with case-sensitive segment matching
-    const existsCaseSensitive = async (baseDir, segments) => {
-      let dir = baseDir;
-      for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-        let entries;
-        try {
-          entries = await fs.readdir(dir, { withFileTypes: true });
-        } catch {
-          return false;
-        }
-        const hit = entries.find((e) => e.name === seg);
-        if (!hit) return false;
-        // Parents must be directories; the last segment may be a file or directory
-        if (i < segments.length - 1 && !hit.isDirectory()) return false;
-        dir = path.join(dir, hit.name);
-      }
-      return true;
-    };
-
-    // Helper: check if a directory is a V6+ installation
-    const isV6Installation = async (dirPath) => {
-      const manifestPath = path.join(dirPath, '_cfg', 'manifest.yaml');
-      if (!(await fs.pathExists(manifestPath))) {
-        return false;
-      }
-      try {
-        const yaml = require('js-yaml');
-        const manifestContent = await fs.readFile(manifestPath, 'utf8');
-        const manifest = yaml.load(manifestContent);
-        // V6+ manifest has installation.version
-        return manifest && manifest.installation && manifest.installation.version;
-      } catch {
-        return false;
-      }
-    };
-
     const offenders = [];
 
-    // Strategy:
-    // 1. First scan for ANY V6+ installation (_cfg/manifest.yaml)
-    // 2. If V6+ found → don't flag anything (user is already on V6+)
-    // 3. If NO V6+ found → flag folders with "bmad" in name as potential V4 legacy
-
-    let hasV6Installation = false;
-    const potentialV4Folders = [];
-
-    try {
-      const entries = await fs.readdir(projectDir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const name = entry.name;
-          const fullPath = path.join(projectDir, entry.name);
-
-          // Check if directory is empty (skip empty leftover folders)
-          const dirContents = await fs.readdir(fullPath);
-          if (dirContents.length === 0) {
-            continue; // Skip empty folders
-          }
-
-          // Check if it's a V6+ installation by looking for _cfg/manifest.yaml
-          // This works for ANY folder name (not just bmad-prefixed)
-          const isV6 = await isV6Installation(fullPath);
-
-          if (isV6) {
-            // Found a V6+ installation - user is already on V6+
-            hasV6Installation = true;
-            // Don't break - continue scanning to be thorough
-          } else {
-            // Not V6+, check if this is the exact V4 folder name "bmad-method"
-            if (name === 'bmad-method') {
-              // This is the V4 default folder - flag it as legacy
-              potentialV4Folders.push(fullPath);
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignore errors reading directory
-    }
-
-    // Only flag V4 folders if NO V6+ installation was found
-    if (!hasV6Installation && potentialV4Folders.length > 0) {
-      offenders.push(...potentialV4Folders);
-    }
-
-    // Check inside various IDE command folders for legacy bmad folders
-    // V4 used folders like 'bmad-method' or custom names in IDE commands
-    // V6+ uses 'bmad' in IDE commands (hardcoded in IDE handlers)
-    // Legacy V4 IDE command folders won't have a corresponding V6+ installation
-    const ideConfigFolders = ['.opencode', '.claude', '.crush', '.continue', '.cursor', '.windsurf', '.cline', '.roo-cline'];
-
-    for (const ideFolder of ideConfigFolders) {
-      const commandsDirName = ideFolder === '.opencode' ? 'command' : 'commands';
-      const commandsPath = path.join(projectDir, ideFolder, commandsDirName);
-      if (await fs.pathExists(commandsPath)) {
-        try {
-          const commandEntries = await fs.readdir(commandsPath, { withFileTypes: true });
-          for (const entry of commandEntries) {
-            if (entry.isDirectory()) {
-              const name = entry.name;
-              // V4 used 'bmad-method' or similar in IDE commands folders
-              // V6+ uses 'bmad' (hardcoded)
-              // So anything that's NOT 'bmad' but starts with bmad/Bmad is likely V4
-              if ((name.startsWith('bmad') || name.startsWith('Bmad') || name === 'BMad') && name !== 'bmad') {
-                offenders.push(path.join(commandsPath, entry.name));
-              }
-            }
-          }
-        } catch {
-          // Ignore errors reading commands directory
-        }
-      }
+    // Check for .bmad-method folder
+    const bmadMethodPath = path.join(projectDir, '.bmad-method');
+    if (await fs.pathExists(bmadMethodPath)) {
+      offenders.push(bmadMethodPath);
     }
 
     return { hasLegacyV4: offenders.length > 0, offenders };

@@ -1,6 +1,6 @@
 const path = require('node:path');
 const fs = require('fs-extra');
-const yaml = require('js-yaml');
+const yaml = require('yaml');
 const crypto = require('node:crypto');
 const { getSourcePath, getModulePath } = require('../../../lib/project-root');
 
@@ -23,13 +23,13 @@ class ManifestGenerator {
 
   /**
    * Generate all manifests for the installation
-   * @param {string} bmadDir - .bmad
+   * @param {string} bmadDir - _bmad
    * @param {Array} selectedModules - Selected modules for installation
    * @param {Array} installedFiles - All installed files (optional, for hash tracking)
    */
   async generateManifests(bmadDir, selectedModules, installedFiles = [], options = {}) {
-    // Create _cfg directory if it doesn't exist
-    const cfgDir = path.join(bmadDir, '_cfg');
+    // Create _config directory if it doesn't exist
+    const cfgDir = path.join(bmadDir, '_config');
     await fs.ensureDir(cfgDir);
 
     // Store modules list (all modules including preserved ones)
@@ -38,16 +38,19 @@ class ManifestGenerator {
     // Scan the bmad directory to find all actually installed modules
     const installedModules = await this.scanInstalledModules(bmadDir);
 
-    // Deduplicate modules list to prevent duplicates
-    this.modules = [...new Set(['core', ...selectedModules, ...preservedModules, ...installedModules])];
-    this.updatedModules = [...new Set(['core', ...selectedModules, ...installedModules])]; // All installed modules get rescanned
+    // Since custom modules are now installed the same way as regular modules,
+    // we don't need to exclude them from manifest generation
+    const allModules = [...new Set(['core', ...selectedModules, ...preservedModules, ...installedModules])];
+
+    this.modules = allModules;
+    this.updatedModules = allModules; // Include ALL modules (including custom) for scanning
 
     // For CSV manifests, we need to include ALL modules that are installed
     // preservedModules controls which modules stay as-is in the CSV (don't get rescanned)
     // But all modules should be included in the final manifest
-    this.preservedModules = [...new Set([...preservedModules, ...selectedModules, ...installedModules])]; // Include all installed modules
+    this.preservedModules = allModules; // Include ALL modules (including custom)
     this.bmadDir = bmadDir;
-    this.bmadFolderName = path.basename(bmadDir); // Get the actual folder name (e.g., '.bmad' or 'bmad')
+    this.bmadFolderName = path.basename(bmadDir); // Get the actual folder name (e.g., '_bmad' or 'bmad')
     this.allInstalledFiles = installedFiles;
 
     if (!Object.prototype.hasOwnProperty.call(options, 'ides')) {
@@ -118,8 +121,16 @@ class ManifestGenerator {
   async getWorkflowsFromPath(basePath, moduleName) {
     const workflows = [];
     const workflowsPath = path.join(basePath, 'workflows');
+    const debug = process.env.BMAD_DEBUG_MANIFEST === 'true';
+
+    if (debug) {
+      console.log(`[DEBUG] Scanning workflows in: ${workflowsPath}`);
+    }
 
     if (!(await fs.pathExists(workflowsPath))) {
+      if (debug) {
+        console.log(`[DEBUG] Workflows path does not exist: ${workflowsPath}`);
+      }
       return workflows;
     }
 
@@ -136,24 +147,47 @@ class ManifestGenerator {
           await findWorkflows(fullPath, newRelativePath);
         } else if (entry.name === 'workflow.yaml' || entry.name === 'workflow.md') {
           // Parse workflow file (both YAML and MD formats)
+          if (debug) {
+            console.log(`[DEBUG] Found workflow file: ${fullPath}`);
+          }
           try {
-            const content = await fs.readFile(fullPath, 'utf8');
+            // Read and normalize line endings (fix Windows CRLF issues)
+            const rawContent = await fs.readFile(fullPath, 'utf8');
+            const content = rawContent.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
             let workflow;
             if (entry.name === 'workflow.yaml') {
               // Parse YAML workflow
-              workflow = yaml.load(content);
+              workflow = yaml.parse(content);
             } else {
               // Parse MD workflow with YAML frontmatter
               const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
               if (!frontmatterMatch) {
+                if (debug) {
+                  console.log(`[DEBUG] Skipped (no frontmatter): ${fullPath}`);
+                }
                 continue; // Skip MD files without frontmatter
               }
-              workflow = yaml.load(frontmatterMatch[1]);
+              workflow = yaml.parse(frontmatterMatch[1]);
+            }
+
+            if (debug) {
+              console.log(`[DEBUG] Parsed: name="${workflow.name}", description=${workflow.description ? 'OK' : 'MISSING'}`);
             }
 
             // Skip template workflows (those with placeholder values)
             if (workflow.name && workflow.name.includes('{') && workflow.name.includes('}')) {
+              if (debug) {
+                console.log(`[DEBUG] Skipped (template placeholder): ${workflow.name}`);
+              }
+              continue;
+            }
+
+            // Skip workflows marked as non-standalone (reference/example workflows)
+            if (workflow.standalone === false) {
+              if (debug) {
+                console.log(`[DEBUG] Skipped (standalone=false): ${workflow.name}`);
+              }
               continue;
             }
 
@@ -164,7 +198,7 @@ class ManifestGenerator {
                   ? `${this.bmadFolderName}/core/workflows/${relativePath}/${entry.name}`
                   : `${this.bmadFolderName}/${moduleName}/workflows/${relativePath}/${entry.name}`;
 
-              // ALL workflows now generate commands - no standalone property needed
+              // Workflows with standalone: false are filtered out above
               workflows.push({
                 name: workflow.name,
                 description: workflow.description.replaceAll('"', '""'), // Escape quotes for CSV
@@ -179,6 +213,14 @@ class ManifestGenerator {
                 module: moduleName,
                 path: installPath,
               });
+
+              if (debug) {
+                console.log(`[DEBUG] ✓ Added workflow: ${workflow.name} (${moduleName})`);
+              }
+            } else {
+              if (debug) {
+                console.log(`[DEBUG] Skipped (missing name or description): ${fullPath}`);
+              }
             }
           } catch (error) {
             console.warn(`Warning: Failed to parse workflow at ${fullPath}: ${error.message}`);
@@ -188,6 +230,11 @@ class ManifestGenerator {
     };
 
     await findWorkflows(workflowsPath);
+
+    if (debug) {
+      console.log(`[DEBUG] Total workflows found in ${moduleName}: ${workflows.length}`);
+    }
+
     return workflows;
   }
 
@@ -454,36 +501,22 @@ class ManifestGenerator {
   async writeMainManifest(cfgDir) {
     const manifestPath = path.join(cfgDir, 'manifest.yaml');
 
-    // Read existing manifest to preserve custom modules
-    let existingCustomModules = [];
-    if (await fs.pathExists(manifestPath)) {
-      try {
-        const existingContent = await fs.readFile(manifestPath, 'utf8');
-        const existingManifest = yaml.load(existingContent);
-        if (existingManifest && existingManifest.customModules) {
-          existingCustomModules = existingManifest.customModules;
-        }
-      } catch {
-        // If we can't read the existing manifest, continue without preserving custom modules
-        console.warn('Warning: Could not read existing manifest to preserve custom modules');
-      }
-    }
-
     const manifest = {
       installation: {
         version: packageJson.version,
         installDate: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
       },
-      modules: this.modules,
-      customModules: existingCustomModules, // Preserve custom modules
+      modules: this.modules, // Include ALL modules (standard and custom)
       ides: this.selectedIdes,
     };
 
-    const yamlStr = yaml.dump(manifest, {
+    // Clean the manifest to remove any non-serializable values
+    const cleanManifest = structuredClone(manifest);
+
+    const yamlStr = yaml.stringify(cleanManifest, {
       indent: 2,
-      lineWidth: -1,
-      noRefs: true,
+      lineWidth: 0,
       sortKeys: false,
     });
 
@@ -581,6 +614,11 @@ class ManifestGenerator {
    */
   async writeWorkflowManifest(cfgDir) {
     const csvPath = path.join(cfgDir, 'workflow-manifest.csv');
+    const escapeCsv = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
+    const parseCsvLine = (line) => {
+      const columns = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+      return columns.map((c) => c.replaceAll(/^"|"$/g, ''));
+    };
 
     // Read existing manifest to preserve entries
     const existingEntries = new Map();
@@ -592,18 +630,21 @@ class ManifestGenerator {
       for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         if (line) {
-          // Parse CSV (simple parsing assuming no commas in quoted fields)
-          const parts = line.split('","');
+          const parts = parseCsvLine(line);
           if (parts.length >= 4) {
-            const name = parts[0].replace(/^"/, '');
-            const module = parts[2];
-            existingEntries.set(`${module}:${name}`, line);
+            const [name, description, module, workflowPath] = parts;
+            existingEntries.set(`${module}:${name}`, {
+              name,
+              description,
+              module,
+              path: workflowPath,
+            });
           }
         }
       }
     }
 
-    // Create CSV header - removed standalone column as ALL workflows now generate commands
+    // Create CSV header - standalone column removed, everything is canonicalized to 4 columns
     let csv = 'name,description,module,path\n';
 
     // Combine existing and new workflows
@@ -617,12 +658,18 @@ class ManifestGenerator {
     // Add/update new workflows
     for (const workflow of this.workflows) {
       const key = `${workflow.module}:${workflow.name}`;
-      allWorkflows.set(key, `"${workflow.name}","${workflow.description}","${workflow.module}","${workflow.path}"`);
+      allWorkflows.set(key, {
+        name: workflow.name,
+        description: workflow.description,
+        module: workflow.module,
+        path: workflow.path,
+      });
     }
 
     // Write all workflows
     for (const [, value] of allWorkflows) {
-      csv += value + '\n';
+      const row = [escapeCsv(value.name), escapeCsv(value.description), escapeCsv(value.module), escapeCsv(value.path)].join(',');
+      csv += row + '\n';
     }
 
     await fs.writeFile(csvPath, csv);
@@ -889,7 +936,7 @@ class ManifestGenerator {
 
       for (const entry of entries) {
         // Skip if not a directory or is a special directory
-        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === '_cfg') {
+        if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === '_config') {
           continue;
         }
 

@@ -3,7 +3,7 @@ name: 'step-02-profile'
 description: 'Gather comprehensive user profile information through collaborative conversation'
 
 # Path Definitions
-workflow_path: '{project-root}/.bmad/bmb/reference/workflows/meal-prep-nutrition'
+workflow_path: '{project-root}/_bmad/bmb/reference/workflows/meal-prep-nutrition'
 
 # File References (all use {variable} format in file)
 thisStepFile: '{workflow_path}/steps/step-02-profile.md'
@@ -12,8 +12,8 @@ workflowFile: '{workflow_path}/workflow.md'
 outputFile: '{output_folder}/nutrition-plan-{project_name}.md'
 
 # Task References
-advancedElicitationTask: '{project-root}/.bmad/core/tasks/advanced-elicitation.xml'
-partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
+advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
+partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 
 # Template References
 profileTemplate: '{workflow_path}/templates/profile-section.md'
@@ -33,6 +33,7 @@ To gather comprehensive user profile information through collaborative conversat
 - 📖 CRITICAL: Read the complete step file before taking any action
 - 🔄 CRITICAL: When loading next step with 'C', ensure entire file is read
 - 📋 YOU ARE A FACILITATOR, not a content generator
+- ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
 ### Role Reinforcement:
 

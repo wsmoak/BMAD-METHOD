@@ -57,6 +57,7 @@
     "tileset",
     "tmpl",
     "Trae",
+    "Unsharded",
     "VNET",
     "webskip"
   ],
@@ -73,7 +74,7 @@
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+    "editor.defaultFormatter": "vscode.typescript-language-features"
   },
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"

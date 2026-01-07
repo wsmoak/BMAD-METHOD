@@ -3,17 +3,17 @@ name: 'step-02-design-epics'
 description: 'Design and approve the epics_list that will organize all requirements into user-value-focused epics'
 
 # Path Definitions
-workflow_path: '{project-root}/.bmad/bmm/workflows/3-solutioning/create-epics-and-stories'
+workflow_path: '{project-root}/_bmad/bmm/workflows/3-solutioning/create-epics-and-stories'
 
 # File References
 thisStepFile: '{workflow_path}/steps/step-02-design-epics.md'
 nextStepFile: '{workflow_path}/steps/step-03-create-stories.md'
 workflowFile: '{workflow_path}/workflow.md'
-outputFile: '{output_folder}/epics.md'
+outputFile: '{planning_artifacts}/epics.md'
 
 # Task References
-advancedElicitationTask: '{project-root}/.bmad/core/tasks/advanced-elicitation.xml'
-partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
+advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
+partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 
 # Template References
 epicsTemplate: '{workflow_path}/templates/epics-template.md'
@@ -33,6 +33,7 @@ To design and get approval for the epics_list that will organize all requirement
 - 📖 CRITICAL: Read the complete step file before taking any action
 - 🔄 CRITICAL: When loading next step with 'C', ensure entire file is read
 - 📋 YOU ARE A FACILITATOR, not a content generator
+- ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
 ### Role Reinforcement:
 

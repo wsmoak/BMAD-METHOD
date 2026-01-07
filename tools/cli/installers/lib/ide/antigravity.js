@@ -45,12 +45,12 @@ class AntigravitySetup extends BaseIdeSetup {
       const injectionConfigPath = path.join(sourceModulesPath, moduleName, 'sub-modules', 'antigravity', 'injections.yaml');
 
       if (await this.exists(injectionConfigPath)) {
-        const yaml = require('js-yaml');
+        const yaml = require('yaml');
 
         try {
           // Load injection configuration
           const configContent = await fs.readFile(injectionConfigPath, 'utf8');
-          const injectionConfig = yaml.load(configContent);
+          const injectionConfig = yaml.parse(configContent);
 
           // Ask about subagents if they exist and we haven't asked yet
           if (injectionConfig.subagents && !config.subagentChoices) {
@@ -58,7 +58,7 @@ class AntigravitySetup extends BaseIdeSetup {
 
             if (config.subagentChoices.install !== 'none') {
               // Ask for installation location
-              const inquirer = require('inquirer');
+              const inquirer = require('inquirer').default || require('inquirer');
               const locationAnswer = await inquirer.prompt([
                 {
                   type: 'list',
@@ -119,7 +119,7 @@ class AntigravitySetup extends BaseIdeSetup {
     await this.ensureDir(bmadWorkflowsDir);
 
     // Generate agent launchers using AgentCommandGenerator
-    // This creates small launcher files that reference the actual agents in .bmad/
+    // This creates small launcher files that reference the actual agents in _bmad/
     const agentGen = new AgentCommandGenerator(this.bmadFolderName);
     const { artifacts: agentArtifacts, counts: agentCounts } = await agentGen.collectAgentArtifacts(bmadDir, options.selectedModules || []);
 
@@ -297,7 +297,7 @@ class AntigravitySetup extends BaseIdeSetup {
         choices = await this.promptSubagentInstallation(config.subagents);
 
         if (choices.install !== 'none') {
-          const inquirer = require('inquirer');
+          const inquirer = require('inquirer').default || require('inquirer');
           const locationAnswer = await inquirer.prompt([
             {
               type: 'list',
@@ -334,7 +334,7 @@ class AntigravitySetup extends BaseIdeSetup {
    * Prompt user for subagent installation preferences
    */
   async promptSubagentInstallation(subagentConfig) {
-    const inquirer = require('inquirer');
+    const inquirer = require('inquirer').default || require('inquirer');
 
     // First ask if they want to install subagents
     const { install } = await inquirer.prompt([

@@ -3,20 +3,20 @@ name: 'step-06-innovation'
 description: 'Detect and explore innovative aspects of the product (optional step)'
 
 # Path Definitions
-workflow_path: '{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd'
+workflow_path: '{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd'
 
 # File References
 thisStepFile: '{workflow_path}/steps/step-06-innovation.md'
 nextStepFile: '{workflow_path}/steps/step-07-project-type.md'
 workflowFile: '{workflow_path}/workflow.md'
-outputFile: '{output_folder}/prd.md'
+outputFile: '{planning_artifacts}/prd.md'
 
 # Data Files
 projectTypesCSV: '{workflow_path}/project-types.csv'
 
 # Task References
-advancedElicitationTask: '{project-root}/.bmad/core/tasks/advanced-elicitation.xml'
-partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
+advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
+partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 ---
 
 # Step 6: Innovation Discovery
@@ -33,6 +33,7 @@ partyModeWorkflow: '{project-root}/.bmad/core/workflows/party-mode/workflow.md'
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - 💬 FOCUS on detecting and exploring innovative aspects of the product
 - 🎯 OPTIONAL STEP: Only proceed if innovation signals are detected
+- ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
 ## EXECUTION PROTOCOLS:
 
@@ -52,8 +53,8 @@ This step will generate content and present choices:
 
 ## PROTOCOL INTEGRATION:
 
-- When 'A' selected: Execute {project-root}/.bmad/core/tasks/advanced-elicitation.xml
-- When 'P' selected: Execute {project-root}/.bmad/core/workflows/party-mode/workflow.md
+- When 'A' selected: Execute {project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml
+- When 'P' selected: Execute {project-root}/_bmad/core/workflows/party-mode/workflow.md
 - PROTOCOLS always return to this step's A/P/C menu
 - User accepts/rejects protocol changes before proceeding
 
@@ -83,7 +84,7 @@ Detect and explore innovation patterns in the product, focusing on what makes it
 
 Load innovation signals specific to this project type:
 
-- Load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/project-types.csv` completely
+- Load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/project-types.csv` completely
 - Find the row where `project_type` matches detected type from step-02
 - Extract `innovation_signals` (semicolon-separated list)
 - Extract `web_search_triggers` for potential innovation research
@@ -186,7 +187,7 @@ Show the generated innovation content and present choices:
 
 #### If 'A' (Advanced Elicitation):
 
-- Execute {project-root}/.bmad/core/tasks/advanced-elicitation.xml with the current innovation content
+- Execute {project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml with the current innovation content
 - Process the enhanced innovation insights that come back
 - Ask user: "Accept these improvements to the innovation analysis? (y/n)"
 - If yes: Update content with improvements, then return to A/P/C menu
@@ -194,7 +195,7 @@ Show the generated innovation content and present choices:
 
 #### If 'P' (Party Mode):
 
-- Execute {project-root}/.bmad/core/workflows/party-mode/workflow.md with the current innovation content
+- Execute {project-root}/_bmad/core/workflows/party-mode/workflow.md with the current innovation content
 - Process the collaborative innovation exploration and ideation
 - Ask user: "Accept these changes to the innovation analysis? (y/n)"
 - If yes: Update content with improvements, then return to A/P/C menu
@@ -202,9 +203,9 @@ Show the generated innovation content and present choices:
 
 #### If 'C' (Continue):
 
-- Append the final content to `{output_folder}/prd.md`
-- Update frontmatter: `stepsCompleted: [1, 2, 3, 4, 5, 6]`
-- Load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`
+- Append the final content to `{outputFile}`
+- Update frontmatter: add this step name to the end of the steps completed array
+- Load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`
 
 ## NO INNOVATION DETECTED:
 
@@ -215,7 +216,7 @@ If no genuine innovation signals are found after exploration:
 [A] Force innovation exploration - Let's try to find innovative angles
 [C] Continue - Skip innovation section and move to Project Type Analysis (Step 7 of 11)"
 
-If user selects 'A', proceed with content generation anyway. If 'C', skip this step and load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`.
+If user selects 'A', proceed with content generation anyway. If 'C', skip this step and load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`.
 
 ## APPEND TO DOCUMENT:
 
@@ -247,7 +248,7 @@ When user selects 'C', append the content directly to the document using the str
 
 ## SKIP CONDITIONS:
 
-Skip this step and load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md` if:
+Skip this step and load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md` if:
 
 - No innovation signals detected in conversation
 - Product is incremental improvement rather than breakthrough
@@ -256,6 +257,6 @@ Skip this step and load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd
 
 ## NEXT STEP:
 
-After user selects 'C' and content is saved to document (or step is skipped), load `{project-root}/.bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`.
+After user selects 'C' and content is saved to document (or step is skipped), load `{project-root}/_bmad/bmm/workflows/2-plan-workflows/prd/steps/step-07-project-type.md`.
 
 Remember: Do NOT proceed to step-07 until user explicitly selects 'C' from the A/P/C menu (or confirms step skip)!

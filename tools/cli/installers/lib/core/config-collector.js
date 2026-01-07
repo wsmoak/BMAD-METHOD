@@ -1,8 +1,8 @@
 const path = require('node:path');
 const fs = require('fs-extra');
-const yaml = require('js-yaml');
+const yaml = require('yaml');
 const chalk = require('chalk');
-const inquirer = require('inquirer');
+const inquirer = require('inquirer').default || require('inquirer');
 const { getProjectRoot, getModulePath } = require('../../../lib/project-root');
 const { CLIUtils } = require('../../../lib/cli-utils');
 
@@ -15,7 +15,7 @@ class ConfigCollector {
 
   /**
    * Find the bmad installation directory in a project
-   * V6+ installations can use ANY folder name but ALWAYS have _cfg/manifest.yaml
+   * V6+ installations can use ANY folder name but ALWAYS have _config/manifest.yaml
    * @param {string} projectDir - Project directory
    * @returns {Promise<string>} Path to bmad directory
    */
@@ -26,13 +26,13 @@ class ConfigCollector {
       return path.join(projectDir, 'bmad');
     }
 
-    // V6+ strategy: Look for ANY directory with _cfg/manifest.yaml
+    // V6+ strategy: Look for ANY directory with _config/manifest.yaml
     // This is the definitive marker of a V6+ installation
     try {
       const entries = await fs.readdir(projectDir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          const manifestPath = path.join(projectDir, entry.name, '_cfg', 'manifest.yaml');
+          const manifestPath = path.join(projectDir, entry.name, '_config', 'manifest.yaml');
           if (await fs.pathExists(manifestPath)) {
             // Found a V6+ installation
             return path.join(projectDir, entry.name);
@@ -59,12 +59,12 @@ class ConfigCollector {
       return null;
     }
 
-    // Look for ANY directory with _cfg/manifest.yaml
+    // Look for ANY directory with _config/manifest.yaml
     try {
       const entries = await fs.readdir(projectDir, { withFileTypes: true });
       for (const entry of entries) {
         if (entry.isDirectory()) {
-          const manifestPath = path.join(projectDir, entry.name, '_cfg', 'manifest.yaml');
+          const manifestPath = path.join(projectDir, entry.name, '_config', 'manifest.yaml');
           if (await fs.pathExists(manifestPath)) {
             // Found a V6+ installation, return just the folder name
             return entry.name;
@@ -105,11 +105,17 @@ class ConfigCollector {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
+        // Skip the _config directory - it's for system use
+        if (entry.name === '_config' || entry.name === '_memory') {
+          continue;
+        }
+
         const moduleConfigPath = path.join(bmadDir, entry.name, 'config.yaml');
+
         if (await fs.pathExists(moduleConfigPath)) {
           try {
             const content = await fs.readFile(moduleConfigPath, 'utf8');
-            const moduleConfig = yaml.load(content);
+            const moduleConfig = yaml.parse(content);
             if (moduleConfig) {
               this.existingConfig[entry.name] = moduleConfig;
               foundAny = true;
@@ -119,10 +125,6 @@ class ConfigCollector {
           }
         }
       }
-    }
-
-    if (foundAny) {
-      console.log(chalk.cyan('\n📋 Found existing BMAD module configurations'));
     }
 
     return foundAny;
@@ -238,7 +240,7 @@ class ConfigCollector {
     }
 
     const configContent = await fs.readFile(configPath, 'utf8');
-    const moduleConfig = yaml.load(configContent);
+    const moduleConfig = yaml.parse(configContent);
 
     if (!moduleConfig) {
       return false;
@@ -248,14 +250,41 @@ class ConfigCollector {
     const configKeys = Object.keys(moduleConfig).filter((key) => key !== 'prompt');
     const existingKeys = this.existingConfig && this.existingConfig[moduleName] ? Object.keys(this.existingConfig[moduleName]) : [];
 
+    // Check if this module has no configuration keys at all (like CIS)
+    // Filter out metadata fields and only count actual config objects
+    const metadataFields = new Set(['code', 'name', 'header', 'subheader', 'default_selected']);
+    const actualConfigKeys = configKeys.filter((key) => !metadataFields.has(key));
+    const hasNoConfig = actualConfigKeys.length === 0;
+
+    // If module has no config keys at all, handle it specially
+    if (hasNoConfig && moduleConfig.subheader) {
+      // Add blank line for better readability (matches other modules)
+      console.log();
+      const moduleDisplayName = moduleConfig.header || `${moduleName.toUpperCase()} Module`;
+
+      // Display the module name in color first (matches other modules)
+      console.log(chalk.cyan('?') + ' ' + chalk.magenta(moduleDisplayName));
+
+      // Show the subheader since there's no configuration to ask about
+      console.log(chalk.dim(`  ✓ ${moduleConfig.subheader}`));
+      return false; // No new fields
+    }
+
+    // Find new interactive fields (with prompt)
     const newKeys = configKeys.filter((key) => {
       const item = moduleConfig[key];
       // Check if it's a config item and doesn't exist in existing config
       return item && typeof item === 'object' && item.prompt && !existingKeys.includes(key);
     });
 
-    // If in silent mode and no new keys, use existing config and skip prompts
-    if (silentMode && newKeys.length === 0) {
+    // Find new static fields (without prompt, just result)
+    const newStaticKeys = configKeys.filter((key) => {
+      const item = moduleConfig[key];
+      return item && typeof item === 'object' && !item.prompt && item.result && !existingKeys.includes(key);
+    });
+
+    // If in silent mode and no new keys (neither interactive nor static), use existing config and skip prompts
+    if (silentMode && newKeys.length === 0 && newStaticKeys.length === 0) {
       if (this.existingConfig && this.existingConfig[moduleName]) {
         if (!this.collectedConfig[moduleName]) {
           this.collectedConfig[moduleName] = {};
@@ -289,14 +318,18 @@ class ConfigCollector {
           this.allAnswers[`${moduleName}_user_name`] = this.getDefaultUsername();
         }
       }
-      // Show "no config" message for modules with no new questions
-      CLIUtils.displayModuleNoConfig(moduleName, moduleConfig.header, moduleConfig.subheader);
+
+      // Show "no config" message for modules with no new questions (that have config keys)
+      console.log(chalk.dim(`  ✓ ${moduleName.toUpperCase()} module already up to date`));
       return false; // No new fields
     }
 
-    // If we have new fields, build questions first
-    if (newKeys.length > 0) {
+    // If we have new fields (interactive or static), process them
+    if (newKeys.length > 0 || newStaticKeys.length > 0) {
       const questions = [];
+      const staticAnswers = {};
+
+      // Build questions for interactive fields
       for (const key of newKeys) {
         const item = moduleConfig[key];
         const question = await this.buildQuestion(moduleName, key, item, moduleConfig);
@@ -305,38 +338,54 @@ class ConfigCollector {
         }
       }
 
+      // Prepare static answers (no prompt, just result)
+      for (const key of newStaticKeys) {
+        staticAnswers[`${moduleName}_${key}`] = undefined;
+      }
+
+      // Collect all answers (static + prompted)
+      let allAnswers = { ...staticAnswers };
+
       if (questions.length > 0) {
         // Only show header if we actually have questions
         CLIUtils.displayModuleConfigHeader(moduleName, moduleConfig.header, moduleConfig.subheader);
         console.log(); // Line break before questions
-        const answers = await inquirer.prompt(questions);
+        const promptedAnswers = await inquirer.prompt(questions);
 
-        // Store answers for cross-referencing
-        Object.assign(this.allAnswers, answers);
+        // Merge prompted answers with static answers
+        Object.assign(allAnswers, promptedAnswers);
+      } else if (newStaticKeys.length > 0) {
+        // Only static fields, no questions - show no config message
+        console.log(chalk.dim(`  ✓ ${moduleName.toUpperCase()} module configuration updated`));
+      }
 
-        // Process answers and build result values
-        for (const key of Object.keys(answers)) {
-          const originalKey = key.replace(`${moduleName}_`, '');
-          const item = moduleConfig[originalKey];
-          const value = answers[key];
+      // Store all answers for cross-referencing
+      Object.assign(this.allAnswers, allAnswers);
 
-          let result;
-          if (Array.isArray(value)) {
-            result = value;
-          } else if (item.result) {
-            result = this.processResultTemplate(item.result, value);
-          } else {
-            result = value;
-          }
-
-          if (!this.collectedConfig[moduleName]) {
-            this.collectedConfig[moduleName] = {};
-          }
-          this.collectedConfig[moduleName][originalKey] = result;
-        }
+      // Process all answers (both static and prompted)
+      // First, copy existing config to preserve values that aren't being updated
+      if (this.existingConfig && this.existingConfig[moduleName]) {
+        this.collectedConfig[moduleName] = { ...this.existingConfig[moduleName] };
       } else {
-        // New keys exist but no questions generated - show no config message
-        CLIUtils.displayModuleNoConfig(moduleName, moduleConfig.header, moduleConfig.subheader);
+        this.collectedConfig[moduleName] = {};
+      }
+
+      for (const key of Object.keys(allAnswers)) {
+        const originalKey = key.replace(`${moduleName}_`, '');
+        const item = moduleConfig[originalKey];
+        const value = allAnswers[key];
+
+        let result;
+        if (Array.isArray(value)) {
+          result = value;
+        } else if (item.result) {
+          result = this.processResultTemplate(item.result, value);
+        } else {
+          result = value;
+        }
+
+        // Update the collected config with new/updated values
+        this.collectedConfig[moduleName][originalKey] = result;
       }
     }
 
@@ -353,7 +402,7 @@ class ConfigCollector {
       }
     }
 
-    return newKeys.length > 0; // Return true if we prompted for new fields
+    return newKeys.length > 0 || newStaticKeys.length > 0; // Return true if we had any new fields (interactive or static)
   }
 
   /**
@@ -493,7 +542,7 @@ class ConfigCollector {
     }
 
     const configContent = await fs.readFile(configPath, 'utf8');
-    const moduleConfig = yaml.load(configContent);
+    const moduleConfig = yaml.parse(configContent);
 
     if (!moduleConfig) {
       return;
@@ -501,30 +550,86 @@ class ConfigCollector {
 
     // Process each config item
     const questions = [];
+    const staticAnswers = {};
     const configKeys = Object.keys(moduleConfig).filter((key) => key !== 'prompt');
 
     for (const key of configKeys) {
       const item = moduleConfig[key];
 
       // Skip if not a config object
-      if (!item || typeof item !== 'object' || !item.prompt) {
+      if (!item || typeof item !== 'object') {
         continue;
       }
 
-      const question = await this.buildQuestion(moduleName, key, item, moduleConfig);
-      if (question) {
-        questions.push(question);
+      // Handle static values (no prompt, just result)
+      if (!item.prompt && item.result) {
+        // Add to static answers with a marker value
+        staticAnswers[`${moduleName}_${key}`] = undefined;
+        continue;
+      }
+
+      // Handle interactive values (with prompt)
+      if (item.prompt) {
+        const question = await this.buildQuestion(moduleName, key, item, moduleConfig);
+        if (question) {
+          questions.push(question);
+        }
       }
     }
 
-    // Display appropriate header based on whether there are questions
-    if (questions.length > 0) {
-      CLIUtils.displayModuleConfigHeader(moduleName, moduleConfig.header, moduleConfig.subheader);
-      console.log(); // Line break before questions
-      const answers = await inquirer.prompt(questions);
+    // Collect all answers (static + prompted)
+    let allAnswers = { ...staticAnswers };
 
-      // Store answers for cross-referencing
-      Object.assign(this.allAnswers, answers);
+    // If there are questions to ask, prompt for accepting defaults vs customizing
+    if (questions.length > 0) {
+      const moduleDisplayName = moduleConfig.header || `${moduleName.toUpperCase()} Module`;
+      console.log();
+      console.log(chalk.cyan('?') + ' ' + chalk.magenta(moduleDisplayName));
+      let customize = true;
+      if (moduleName !== 'core') {
+        const customizeAnswer = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'customize',
+            message: 'Accept Defaults (no to customize)?',
+            default: true,
+          },
+        ]);
+        customize = customizeAnswer.customize;
+      }
+
+      if (customize && moduleName !== 'core') {
+        // Accept defaults - only ask questions that have NO default value
+        const questionsWithoutDefaults = questions.filter((q) => q.default === undefined || q.default === null || q.default === '');
+
+        if (questionsWithoutDefaults.length > 0) {
+          console.log(chalk.dim(`\n  Asking required questions for ${moduleName.toUpperCase()}...`));
+          const promptedAnswers = await inquirer.prompt(questionsWithoutDefaults);
+          Object.assign(allAnswers, promptedAnswers);
+        }
+
+        // For questions with defaults that weren't asked, we need to process them with their default values
+        const questionsWithDefaults = questions.filter((q) => q.default !== undefined && q.default !== null && q.default !== '');
+        for (const question of questionsWithDefaults) {
+          // Skip function defaults - these are dynamic and will be evaluated later
+          if (typeof question.default === 'function') {
+            continue;
+          }
+          allAnswers[question.name] = question.default;
+        }
+      } else {
+        const promptedAnswers = await inquirer.prompt(questions);
+        Object.assign(allAnswers, promptedAnswers);
+      }
+    }
+
+    // Store all answers for cross-referencing
+    Object.assign(this.allAnswers, allAnswers);
+
+    // Process all answers (both static and prompted)
+    // Always process if we have any answers or static answers
+    if (Object.keys(allAnswers).length > 0 || Object.keys(staticAnswers).length > 0) {
+      const answers = allAnswers;
 
       // Process answers and build result values
       for (const key of Object.keys(answers)) {
@@ -537,8 +642,6 @@ class ConfigCollector {
 
         // For arrays (multi-select), handle differently
         if (Array.isArray(value)) {
-          // If there's a result template and it's a string, don't use it for arrays
-          // Just use the array value directly
           result = value;
         } else if (item.result) {
           result = item.result;
@@ -553,11 +656,9 @@ class ConfigCollector {
               if (result === '{value}') {
                 result = value;
               } else {
-                // Otherwise replace in the string
                 result = result.replace('{value}', value);
               }
             } else {
-              // For non-string values, use directly
               result = value;
             }
 
@@ -609,7 +710,6 @@ class ConfigCollector {
             }
           }
         } else {
-          // No result template, use value directly
           result = value;
         }
 
@@ -622,8 +722,68 @@ class ConfigCollector {
 
       // No longer display completion boxes - keep output clean
     } else {
-      // No questions for this module - show completion message
-      CLIUtils.displayModuleNoConfig(moduleName, moduleConfig.header, moduleConfig.subheader);
+      // No questions for this module - show completion message with header if available
+      const moduleDisplayName = moduleConfig.header || `${moduleName.toUpperCase()} Module`;
+
+      // Check if this module has NO configuration keys at all (like CIS)
+      // Filter out metadata fields and only count actual config objects
+      const metadataFields = new Set(['code', 'name', 'header', 'subheader', 'default_selected']);
+      const actualConfigKeys = configKeys.filter((key) => !metadataFields.has(key));
+      const hasNoConfig = actualConfigKeys.length === 0;
+
+      if (hasNoConfig && (moduleConfig.subheader || moduleConfig.header)) {
+        // Module explicitly has no configuration - show with special styling
+        // Add blank line for better readability (matches other modules)
+        console.log();
+
+        // Display the module name in color first (matches other modules)
+        console.log(chalk.cyan('?') + ' ' + chalk.magenta(moduleDisplayName));
+
+        // Ask user if they want to accept defaults or customize on the next line
+        const { customize } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'customize',
+            message: 'Accept Defaults (no to customize)?',
+            default: true,
+          },
+        ]);
+
+        // Show the subheader if available, otherwise show a default message
+        if (moduleConfig.subheader) {
+          console.log(chalk.dim(`  ✓ ${moduleConfig.subheader}`));
+        } else {
+          console.log(chalk.dim(`  ✓ No custom configuration required`));
+        }
+      } else {
+        // Module has config but just no questions to ask
+        console.log(chalk.dim(`  ✓ ${moduleName.toUpperCase()} module configured`));
+      }
+    }
+
+    // If we have no collected config for this module, but we have a module schema,
+    // ensure we have at least an empty object
+    if (!this.collectedConfig[moduleName]) {
+      this.collectedConfig[moduleName] = {};
+
+      // If we accepted defaults and have no answers, we still need to check
+      // if there are any static values in the schema that should be applied
+      if (moduleConfig) {
+        for (const key of Object.keys(moduleConfig)) {
+          if (key !== 'prompt' && moduleConfig[key] && typeof moduleConfig[key] === 'object') {
+            const item = moduleConfig[key];
+            // For static items (no prompt, just result), apply the result
+            if (!item.prompt && item.result) {
+              // Apply any placeholder replacements to the result
+              let result = item.result;
+              if (typeof result === 'string') {
+                result = this.replacePlaceholders(result, moduleName, moduleConfig);
+              }
+              this.collectedConfig[moduleName][key] = result;
+            }
+          }
+        }
+      }
     }
   }
 

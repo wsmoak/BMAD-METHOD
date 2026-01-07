@@ -4,13 +4,14 @@ language: "en-US"
 early_access: true
 reviews:
   profile: chill
-  high_level_summary: true
+  high_level_summary: false # don't post summary until explicitly invoked
   request_changes_workflow: false
   review_status: false
-  collapse_walkthrough: false
+  commit_status: false
+  walkthrough: false
   poem: false
   auto_review:
-    enabled: false # must be manually triggered with @coderabbit review
+    enabled: false
     drafts: true # Can review drafts. Since it's manually triggered, it's fine.
     auto_incremental_review: false # always review the whole PR, not just new commits
     base_branches:
@@ -33,4 +34,7 @@ reviews:
         Flag any process.exit() without error message.
 chat:
   auto_reply: true # Response to mentions in comments, a la @coderabbit review
+issue_enrichment:
+  auto_enrich:
+    enabled: false # don't auto-comment on issues
 
