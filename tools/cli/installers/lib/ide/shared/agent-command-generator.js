@@ -1,5 +1,6 @@
 const path = require('node:path');
 const fs = require('fs-extra');
+const csv = require('csv-parse/sync');
 const { toColonPath, toDashPath, customAgentColonName, customAgentDashName, BMAD_FOLDER_NAME } = require('./path-utils');
 
 /**
@@ -20,6 +21,7 @@ class AgentCommandGenerator {
    */
   async collectAgentArtifacts(bmadDir, selectedModules = []) {
     const { getAgentsFromBmad } = require('./bmad-artifacts');
+    const agentManifest = await this.loadAgentManifest(bmadDir);
 
     // Get agents from INSTALLED bmad/ directory
     const agents = await getAgentsFromBmad(bmadDir, selectedModules);
@@ -42,10 +44,17 @@ class AgentCommandGenerator {
           agentRelPath = parts.slice(1).join('/');
         }
       }
+      const manifestKey = `${agent.module}:${agent.name}`;
+      const manifestEntry = agentManifest.get(manifestKey) || agentManifest.get(agent.name);
       artifacts.push({
         type: 'agent-launcher',
         name: agent.name,
+        displayName: manifestEntry?.displayName || agent.displayName || agent.name,
         description: agent.description || `${agent.name} agent`,
+        title: manifestEntry?.title || '',
+        icon: manifestEntry?.icon || '',
+        capabilities: manifestEntry?.capabilities || '',
+        role: manifestEntry?.role || '',
         module: agent.module,
         relativePath: path.join(agent.module, 'agents', agentPathInModule), // For command filename
         agentPath: agentRelPath, // Relative path to actual agent file
@@ -60,6 +69,41 @@ class AgentCommandGenerator {
         agents: agents.length,
       },
     };
+  }
+
+  /**
+   * Load agent manifest metadata keyed by module/name.
+   * @param {string} bmadDir - BMAD installation directory
+   * @returns {Map<string, Object>} Manifest rows
+   */
+  async loadAgentManifest(bmadDir) {
+    const manifestPath = path.join(bmadDir, '_config', 'agent-manifest.csv');
+    const recordsByKey = new Map();
+
+    if (!(await fs.pathExists(manifestPath))) {
+      return recordsByKey;
+    }
+
+    try {
+      const csvContent = await fs.readFile(manifestPath, 'utf8');
+      const records = csv.parse(csvContent, {
+        columns: true,
+        skip_empty_lines: true,
+      });
+
+      for (const record of records) {
+        if (!record || !record.name) continue;
+
+        recordsByKey.set(record.name, record);
+        if (record.module) {
+          recordsByKey.set(`${record.module}:${record.name}`, record);
+        }
+      }
+    } catch {
+      // Graceful fallback to name-based defaults when manifest is unavailable or malformed.
+    }
+
+    return recordsByKey;
   }
 
   /**
