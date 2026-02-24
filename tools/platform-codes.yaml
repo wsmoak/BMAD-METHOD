@@ -74,8 +74,8 @@ platforms:
     description: "GitHub's AI pair programmer"
 
   codex:
-    name: "Codex"
-    preferred: false
+    name: "Agent Skills (Codex)"
+    preferred: true
     category: cli
     description: "OpenAI Codex integration"
 

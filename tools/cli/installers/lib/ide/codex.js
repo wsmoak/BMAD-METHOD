@@ -15,7 +15,7 @@ const prompts = require('../../../lib/prompts');
  */
 class CodexSetup extends BaseIdeSetup {
   constructor() {
-    super('codex', 'Codex', false);
+    super('codex', 'Agent Skills (Codex)', true);
   }
 
   /**
